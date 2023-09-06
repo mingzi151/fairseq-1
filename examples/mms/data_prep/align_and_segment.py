@@ -90,12 +90,30 @@ def get_alignments(
     input_lengths = torch.tensor(emissions.shape[0])
     target_lengths = torch.tensor(targets.shape[0])
 
-    path, _ = F.forced_align(
-        emissions, targets, input_lengths, target_lengths, blank=blank
-    )
-    path = path.to("cpu").tolist()
-    segments = merge_repeats(path, {v: k for k, v in dictionary.items()})
-    return segments, stride
+    try:
+        path, _ = F.forced_align(
+            emissions, targets, input_lengths, target_lengths, blank=blank
+        )
+        path = path.to("cpu").tolist()
+        segments = merge_repeats(path, {v: k for k, v in dictionary.items()})
+        return segments, stride
+    except Exception as _:
+        # incurred errors because of missing batch sizes at dim=0
+        def _fix_shape(t):
+            return t.unsqueeze(dim=0)
+        emissions = _fix_shape(emissions)
+        targets = _fix_shape(targets)
+        input_lengths = _fix_shape(input_lengths)
+        target_lengths = _fix_shape(target_lengths)
+
+        path, _ = F.forced_align(
+            emissions, targets, input_lengths, target_lengths, blank=blank
+        )
+        
+        path = path.to("cpu").tolist()
+        path = path[0]
+        segments = merge_repeats(path, {v: k for k, v in dictionary.items()})
+        return segments, stride
 
 
 def main(args):
